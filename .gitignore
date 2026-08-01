@@ -1,0 +1,29 @@
+# === Python関連 ===
+# 実行時に自動生成されるキャッシュファイルを無視
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 仮想環境（venv）を使っている場合は無視
+.venv/
+venv/
+env/
+ENV/
+
+# === データ・一時ファイル関連 ===
+test.xlsx
+*.xls
+*.xlsx
+
+# === OS・エディタ関連 ===
+# macOS固有の隠しファイル
+.DS_Store
+
+# Windows固有のキャッシュファイル
+Thumbs.db
+
+# VS Codeの設定フォルダ
+.vscode/
+
+# PyCharmの設定フォルダ
+.idea/

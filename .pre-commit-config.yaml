@@ -1,0 +1,24 @@
+repos:
+  # 一般的なコードチェック・整形
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace   # 末尾の無駄な空白を削除
+      - id: end-of-file-fixer     # ファイル末尾の改行を統一
+      - id: check-yaml            # YAML構文エラーのチェック
+      - id: check-added-large-files # 巨大ファイルの誤コミット防止
+
+  # Ruff (Linter & Formatter)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.0
+    hooks:
+      - id: ruff
+        args: [--fix]             # 自動修正可能なエラーを修正
+      - id: ruff-format           # コードフォーマット
+
+  # Mypy (型チェック)
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [] # 必要に応じて型スタブを追加
