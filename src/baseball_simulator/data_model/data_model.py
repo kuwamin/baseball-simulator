@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 @dataclass
 class CommonInformation:
     number: str
-    dominant_hitting: int
-    dominant_arm: int
+    dominant_hitting: str
+    dominant_arm: str
     name: str
 
 
@@ -18,8 +18,8 @@ class Barometer:
 
 @dataclass
 class CommonSpecialAbility:
-    injury_res: int
-    recovery: int
+    injury_res: str
+    recovery: str
 
 
 @dataclass
@@ -39,11 +39,11 @@ class PitcherBasicAbility:
 
 @dataclass
 class PitcherSpecialAbility:
-    clutch_pitching: int
-    vs_left_batter: int
-    quick: int
-    fastball_life: int
-    toughness: int
+    clutch_pitching: str
+    vs_left_batter: str
+    quick: str
+    fastball_life: str
+    toughness: str
     common_special_ability: CommonSpecialAbility
 
 
@@ -80,7 +80,7 @@ class PitcherStats:
 
 @dataclass
 class Pitcher:
-    aptitude: int
+    aptitude: str
     ability: PitcherAbility
     fatugue_stamina: int = 0
     stats: PitcherStats = field(default_factory=PitcherStats)
@@ -100,12 +100,12 @@ class BatterBasicAbility:
 
 @dataclass
 class BatterSpecialAbility:
-    clutch_batting: int
-    vs_left_pitcher: int
-    stealing: int
-    base_running: int
-    throwing: int
-    eye: int
+    clutch_batting: str
+    vs_left_pitcher: str
+    stealing: str
+    base_running: str
+    throwing: str
+    eye: str
     common_special_ability: CommonSpecialAbility
 
 
@@ -139,7 +139,7 @@ class BatterStats:
 
 @dataclass
 class Batter:
-    position: int
+    position: str
     ability: BatterAbility
     stats: BatterStats = field(default_factory=BatterStats)
 
@@ -158,6 +158,16 @@ class Player:
             self.pitcher is not None and self.batter is not None
         ):
             raise ValueError("Player must have either Pitcher or Batter role (XOR).")
+
+    def __hash__(self) -> int:
+        # インスタンス自身のメモリ上の識別子(id)でハッシュを計算する
+        # これにより内部の stats や barometer が更新されてもハッシュ値が変わらず、ネストされたクラスの unhashable エラーも回避できる
+        return id(self)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Player):
+            return NotImplemented
+        return self is other
 
 
 @dataclass

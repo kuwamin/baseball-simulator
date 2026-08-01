@@ -15,53 +15,6 @@ from baseball_simulator.data_model.data_model import (
     Team,
 )
 
-# --- 変換用マッピング辞書 ---
-DOMINANT_MAP: dict[str, int] = {"右": 1, "左": 2, "両": 3}
-
-RANK_MAP: dict[str, int] = {
-    "A": 7,
-    "B": 6,
-    "C": 5,
-    "D": 4,
-    "E": 3,
-    "F": 2,
-    "G": 1,
-}
-
-PITCHER_APTITUDE_MAP: dict[str, int] = {
-    "先": 1,
-    "勝継": 2,
-    "負継": 3,
-    "セ": 4,
-    "抑": 5,
-}
-
-BATTER_POSITION_MAP: dict[str, int] = {
-    "投": 1,
-    "捕": 2,
-    "一": 3,
-    "二": 4,
-    "三": 5,
-    "遊": 6,
-    "左": 7,
-    "中": 8,
-    "右": 9,
-    "指": 10,
-}
-
-
-def _rank_to_int(val: object) -> int:
-    """アルファベットのランク文字列(A~G)を数値に変換する
-
-    Args:
-        val: ランクを表す文字列または値（例: "A", "b" など）
-
-    Returns:
-        int: 対応する数値（7~1）。変換不可の場合は 0。
-    """
-    s = str(val).strip().upper()
-    return RANK_MAP.get(s, 0)
-
 
 def load_player_list_file(file_path: str) -> dict[str, Team]:
     """Excelファイルを読み込み、チーム名をキーとした Team オブジェクトの辞書を返す
@@ -96,15 +49,15 @@ def add_pitchers_from_dataframe(df: pd.DataFrame, teams: dict[str, Team]) -> Non
     """
     for _, row in df.iterrows():
         common_info = CommonInformation(
-            number=str(row["背番号"]),
-            dominant_hitting=DOMINANT_MAP.get(str(row["打"]).strip(), 1),
-            dominant_arm=DOMINANT_MAP.get(str(row["投"]).strip(), 1),
-            name=str(row["名前"]),
+            number=str(row["背番号"]).strip(),
+            dominant_hitting=str(row["打"]).strip(),
+            dominant_arm=str(row["投"]).strip(),
+            name=str(row["名前"]).strip(),
         )
 
         common_special = CommonSpecialAbility(
-            injury_res=_rank_to_int(row["ケガしにくさ"]),
-            recovery=_rank_to_int(row["回復"]),
+            injury_res=str(row["ケガしにくさ"]).strip(),
+            recovery=str(row["回復"]).strip(),
         )
 
         pitcher_basic = PitcherBasicAbility(
@@ -116,11 +69,11 @@ def add_pitchers_from_dataframe(df: pd.DataFrame, teams: dict[str, Team]) -> Non
         )
 
         pitcher_special = PitcherSpecialAbility(
-            clutch_pitching=_rank_to_int(row["対ピンチ"]),
-            vs_left_batter=_rank_to_int(row["対左打者"]),
-            quick=_rank_to_int(row["クイック"]),
-            fastball_life=_rank_to_int(row["ノビ"]),
-            toughness=_rank_to_int(row["打たれ強さ"]),
+            clutch_pitching=str(row["対ピンチ"]).strip(),
+            vs_left_batter=str(row["対左打者"]).strip(),
+            quick=str(row["クイック"]).strip(),
+            fastball_life=str(row["ノビ"]).strip(),
+            toughness=str(row["打たれ強さ"]).strip(),
             common_special_ability=common_special,
         )
 
@@ -130,7 +83,7 @@ def add_pitchers_from_dataframe(df: pd.DataFrame, teams: dict[str, Team]) -> Non
         )
 
         pitcher = Pitcher(
-            aptitude=PITCHER_APTITUDE_MAP.get(str(row["適性"]).strip(), 1),
+            aptitude=str(row["適性"]).strip(),
             ability=pitcher_ability,
         )
 
@@ -158,15 +111,15 @@ def add_batters_from_dataframe(df: pd.DataFrame, teams: dict[str, Team]) -> None
     """
     for _, row in df.iterrows():
         common_info = CommonInformation(
-            number=str(row["背番号"]),
-            dominant_hitting=DOMINANT_MAP.get(str(row["打"]).strip(), 1),
-            dominant_arm=DOMINANT_MAP.get(str(row["投"]).strip(), 1),
-            name=str(row["名前"]),
+            number=str(row["背番号"]).strip(),
+            dominant_hitting=str(row["打"]).strip(),
+            dominant_arm=str(row["投"]).strip(),
+            name=str(row["名前"]).strip(),
         )
 
         common_special = CommonSpecialAbility(
-            injury_res=_rank_to_int(row["ケガしにくさ"]),
-            recovery=_rank_to_int(row["回復"]),
+            injury_res=str(row["ケガしにくさ"]).strip(),
+            recovery=str(row["回復"]).strip(),
         )
 
         batter_basic = BatterBasicAbility(
@@ -180,12 +133,12 @@ def add_batters_from_dataframe(df: pd.DataFrame, teams: dict[str, Team]) -> None
         )
 
         batter_special = BatterSpecialAbility(
-            clutch_batting=_rank_to_int(row["チャンス"]),
-            vs_left_pitcher=_rank_to_int(row["対左投手"]),
-            stealing=_rank_to_int(row["盗塁"]),
-            base_running=_rank_to_int(row["走塁"]),
-            throwing=_rank_to_int(row["送球"]),
-            eye=_rank_to_int(row["選球眼"]),
+            clutch_batting=str(row["チャンス"]).strip(),
+            vs_left_pitcher=str(row["対左投手"]).strip(),
+            stealing=str(row["盗塁"]).strip(),
+            base_running=str(row["走塁"]).strip(),
+            throwing=str(row["送球"]).strip(),
+            eye=str(row["選球眼"]).strip(),
             common_special_ability=common_special,
         )
 
@@ -195,7 +148,7 @@ def add_batters_from_dataframe(df: pd.DataFrame, teams: dict[str, Team]) -> None
         )
 
         batter = Batter(
-            position=BATTER_POSITION_MAP.get(str(row["ポジション"]).strip(), 10),
+            position=str(row["ポジション"]).strip(),
             ability=batter_ability,
         )
 

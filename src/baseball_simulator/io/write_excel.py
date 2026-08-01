@@ -2,28 +2,6 @@ import pandas as pd
 
 from baseball_simulator.data_model.data_model import Player, Team
 
-# 逆引き用マッピング辞書
-REVERSE_PITCHER_APTITUDE_MAP: dict[int, str] = {
-    1: "先",
-    2: "勝継",
-    3: "負継",
-    4: "セ",
-    5: "抑",
-}
-
-REVERSE_BATTER_POSITION_MAP: dict[int, str] = {
-    1: "投",
-    2: "捕",
-    3: "一",
-    4: "二",
-    5: "三",
-    6: "遊",
-    7: "左",
-    8: "中",
-    9: "右",
-    10: "指",
-}
-
 
 def export_stats_to_excel(teams: dict[str, Team], output_file: str) -> None:
     """チーム辞書から全チームの投手・野手成績をそれぞれシート別にExcelへ書き出す
@@ -89,7 +67,7 @@ def _build_pitcher_stat_row(team_name: str, player: Player) -> dict[str, object]
         "所属": team_name,
         "背番号": info.number,
         "名前": info.name,
-        "適性": REVERSE_PITCHER_APTITUDE_MAP.get(pitcher.aptitude, ""),
+        "適性": pitcher.aptitude,
         "登板数": stats.common_stats.games,
         "先発数": stats.starter,
         "勝利": stats.wins,
@@ -141,7 +119,7 @@ def _build_batter_stat_row(team_name: str, player: Player) -> dict[str, object]:
         "所属": team_name,
         "背番号": info.number,
         "名前": info.name,
-        "ポジション": REVERSE_BATTER_POSITION_MAP.get(batter.position, ""),
+        "ポジション": batter.position,
         "試合数": stats.common_stats.games,
         "打席": stats.pa,
         "打数": stats.ab,
