@@ -1,6 +1,21 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from baseball_simulator.data_model.data_model import Player, Team
+
+
+@dataclass
+class Bases:
+    """各塁の走者状態を保持するクラス"""
+
+    first: Player | None = None
+    second: Player | None = None
+    third: Player | None = None
+
+    def clear(self) -> None:
+        """チェンジ時に塁をリセット"""
+        self.first = None
+        self.second = None
+        self.third = None
 
 
 @dataclass
@@ -16,13 +31,16 @@ class GameState:
     home_lineup: StartingLineup
     away_lineup: StartingLineup
     inning: int = 1
-    is_top: bool = True  # True: 表（Away攻撃/Home守備）, False: 裏（Home攻撃/Away守備）
+    is_top: bool = True
     home_score: int = 0
     away_score: int = 0
     out_count: int = 0
 
     away_batter_index: int = 0
     home_batter_index: int = 0
+
+    # 塁の状態を追加
+    bases: Bases = field(default_factory=Bases)
 
     is_game_over: bool = False
 
@@ -45,9 +63,17 @@ class GameState:
         else:
             self.home_batter_index = (self.home_batter_index + 1) % 9
 
+    def add_score(self, runs: int) -> None:
+        """攻撃側のスコアを加算"""
+        if self.is_top:
+            self.away_score += runs
+        else:
+            self.home_score += runs
+
     def change_possession(self) -> None:
         """チェンジ（攻守交代）処理"""
         self.out_count = 0
+        self.bases.clear()  # チェンジ時に走者をクリア
 
         if self.is_top:
             self.is_top = False

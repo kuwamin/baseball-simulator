@@ -2,6 +2,7 @@ from baseball_simulator.data_model.data_model import Team
 from baseball_simulator.data_model.game_model import GameState, StartingLineup
 from baseball_simulator.game.at_bat_rules import AtBatResult, determine_at_bat_result
 from baseball_simulator.game.lineup_selector import build_starting_lineup
+from baseball_simulator.game.runner_rules import advance_runners
 
 
 def play_game(
@@ -95,6 +96,21 @@ def execute_at_bat(game_state: GameState) -> None:
             p_stats.outs += 1
         elif result == AtBatResult.OUT:
             p_stats.outs += 1
+
+    # 進塁処理と得点・打点・失点の記録
+    if result not in (AtBatResult.OUT, AtBatResult.STRIKEOUT):
+        runs = advance_runners(result, batter_player, game_state.bases)
+        if runs > 0:
+            game_state.add_score(runs)
+
+            # 打者の打点(rbi)を加算
+            if batter_player.batter:
+                batter_player.batter.stats.rbi += runs
+
+            # 投手の失点・自責点を加算
+            if pitcher_player.pitcher:
+                pitcher_player.pitcher.stats.run_allowed += runs
+                pitcher_player.pitcher.stats.earned_run += runs
 
     # アウトカウントとゲーム状態の更新
     if result in (AtBatResult.OUT, AtBatResult.STRIKEOUT):
