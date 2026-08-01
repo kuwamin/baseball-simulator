@@ -1,4 +1,4 @@
-TOTAL_GAME_NUMBER: int = 1
+TOTAL_GAME_NUMBER: int = 10
 OPPOSITE_TEAM_LIST: list[str] = [
     "Fighters",
     "Buffaloes",

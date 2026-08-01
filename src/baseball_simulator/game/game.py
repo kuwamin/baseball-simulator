@@ -12,6 +12,10 @@ def play_game(
     """1試合のシミュレーションを最後まで実行する（メインループ）"""
     game_state = init_game(home_team, away_team)
 
+    # 9回裏が終わるまで打席を回す
+    while not game_state.is_game_over:
+        execute_at_bat(game_state)
+
     return game_state
 
 
@@ -23,7 +27,7 @@ def init_game(
     home_lineup = build_starting_lineup(home_team)
     away_lineup = build_starting_lineup(away_team)
 
-    # 出場選手の通算出場数（games）をインクリメント
+    # 出場選手の試合数をインクリメント
     _increment_appearance_stats(home_lineup)
     _increment_appearance_stats(away_lineup)
 
@@ -36,6 +40,31 @@ def init_game(
         away_score=0,
         out_count=0,
     )
+
+
+def execute_at_bat(game_state: GameState) -> None:
+    """【モック】全打席凡退（アウト）として処理し、打者・投手の成績とゲーム状態を更新する"""
+    batter_player = game_state.get_current_batter()
+    pitcher_player = game_state.get_current_pitcher()
+
+    # カウント・ゲーム状態の更新
+    game_state.out_count += 1
+
+    # 打撃成績の更新 ( Batter 側の Player )
+    if batter_player.batter:
+        batter_player.batter.stats.pa += 1  # 打席数
+        batter_player.batter.stats.ab += 1  # 打数
+
+    # 投手成績の更新 ( Pitcher 側の Player )
+    if pitcher_player.pitcher:
+        pitcher_player.pitcher.stats.bf += 1  # 対戦打者数
+        pitcher_player.pitcher.stats.outs += 1  # 取得アウト数
+
+    # 3アウトならチェンジ、継続なら次の打者へ
+    if game_state.out_count >= 3:
+        game_state.change_possession()
+    else:
+        game_state.advance_next_batter()
 
 
 def _increment_appearance_stats(lineup: StartingLineup) -> None:
