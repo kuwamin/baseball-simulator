@@ -1,7 +1,6 @@
-# baseball_simulator/game/game.py
-
 from baseball_simulator.data_model.data_model import Team
 from baseball_simulator.data_model.game_model import GameState, StartingLineup
+from baseball_simulator.game.at_bat_rules import AtBatResult, determine_at_bat_result
 from baseball_simulator.game.lineup_selector import build_starting_lineup
 
 
@@ -43,22 +42,63 @@ def init_game(
 
 
 def execute_at_bat(game_state: GameState) -> None:
-    """【モック】全打席凡退（アウト）として処理し、打者・投手の成績とゲーム状態を更新する"""
+    """1打席を実行し、打席結果に基づいて打者・投手の成績とゲーム状態を更新する"""
     batter_player = game_state.get_current_batter()
     pitcher_player = game_state.get_current_pitcher()
 
-    # カウント・ゲーム状態の更新
-    game_state.out_count += 1
+    # 打席結果の判定
+    result = determine_at_bat_result(pitcher_player, batter_player)
 
-    # 打撃成績の更新 ( Batter 側の Player )
+    # 打撃成績の更新
     if batter_player.batter:
-        batter_player.batter.stats.pa += 1  # 打席数
-        batter_player.batter.stats.ab += 1  # 打数
+        b_stats = batter_player.batter.stats
+        b_stats.pa += 1
 
-    # 投手成績の更新 ( Pitcher 側の Player )
+        if result == AtBatResult.SINGLE:
+            b_stats.ab += 1
+            b_stats.singles += 1
+        elif result == AtBatResult.DOUBLE:
+            b_stats.ab += 1
+            b_stats.doubles += 1
+        elif result == AtBatResult.TRIPLE:
+            b_stats.ab += 1
+            b_stats.triples += 1
+        elif result == AtBatResult.HOME_RUN:
+            b_stats.ab += 1
+            b_stats.homerun += 1
+        elif result == AtBatResult.WALK:
+            b_stats.walks += 1
+        elif result == AtBatResult.STRIKEOUT:
+            b_stats.ab += 1
+            b_stats.so += 1
+        elif result == AtBatResult.OUT:
+            b_stats.ab += 1
+
+    # 投手成績の更新
     if pitcher_player.pitcher:
-        pitcher_player.pitcher.stats.bf += 1  # 対戦打者数
-        pitcher_player.pitcher.stats.outs += 1  # 取得アウト数
+        p_stats = pitcher_player.pitcher.stats
+        p_stats.bf += 1
+
+        if result in (
+            AtBatResult.SINGLE,
+            AtBatResult.DOUBLE,
+            AtBatResult.TRIPLE,
+            AtBatResult.HOME_RUN,
+        ):
+            p_stats.hits_allowed += 1
+            if result == AtBatResult.HOME_RUN:
+                p_stats.hr_allowed += 1
+        elif result == AtBatResult.WALK:
+            p_stats.walks_allowed += 1
+        elif result == AtBatResult.STRIKEOUT:
+            p_stats.strikeouts += 1
+            p_stats.outs += 1
+        elif result == AtBatResult.OUT:
+            p_stats.outs += 1
+
+    # アウトカウントとゲーム状態の更新
+    if result in (AtBatResult.OUT, AtBatResult.STRIKEOUT):
+        game_state.out_count += 1
 
     # 3アウトならチェンジ、継続なら次の打者へ
     if game_state.out_count >= 3:
