@@ -51,27 +51,49 @@ BATTER_POSITION_MAP: dict[str, int] = {
 
 
 def _rank_to_int(val: object) -> int:
-    """アルファベットのランク文字列(A~G)を数値に変換する"""
+    """アルファベットのランク文字列(A~G)を数値に変換する
+
+    Args:
+        val: ランクを表す文字列または値（例: "A", "b" など）
+
+    Returns:
+        int: 対応する数値（7~1）。変換不可の場合は 0。
+    """
     s = str(val).strip().upper()
     return RANK_MAP.get(s, 0)
 
 
 def load_player_list_file(file_path: str) -> dict[str, Team]:
-    """Excelファイルを読み込み、チーム名をキーとした Team オブジェクトの辞書を返す"""
+    """Excelファイルを読み込み、チーム名をキーとした Team オブジェクトの辞書を返す
+
+    Args:
+        file_path: 読み込む Excel ファイルのパス
+
+    Returns:
+        dict[str, Team]: チーム名をキー、Team オブジェクトを値とする辞書
+    """
     excel_data: dict[str, pd.DataFrame] = pd.read_excel(file_path, sheet_name=None)
 
     teams: dict[str, Team] = {}
     for sheet_name, df in excel_data.items():
         if sheet_name == "Pitcher":
-            create_pitcher_object(df, teams)
+            add_pitchers_from_dataframe(df, teams)
         elif sheet_name == "Batter":
-            create_batter_object(df, teams)
+            add_batters_from_dataframe(df, teams)
 
     return teams
 
 
-def create_pitcher_object(df: pd.DataFrame, teams: dict[str, Team]) -> None:
-    """Pitcher シートのデータから Player/Pitcher を構築し、該当する Team に追加する"""
+def add_pitchers_from_dataframe(df: pd.DataFrame, teams: dict[str, Team]) -> None:
+    """Pitcher シートのデータから Player/Pitcher を構築し、該当する Team に追加する
+
+    Args:
+        df: 投手情報が含まれる pandas DataFrame
+        teams: プレイヤーを追加先のチーム辞書（破壊的に更新される）
+
+    Returns:
+        None
+    """
     for _, row in df.iterrows():
         common_info = CommonInformation(
             number=str(row["背番号"]),
@@ -124,8 +146,16 @@ def create_pitcher_object(df: pd.DataFrame, teams: dict[str, Team]) -> None:
         teams[team_name].players.append(player)
 
 
-def create_batter_object(df: pd.DataFrame, teams: dict[str, Team]) -> None:
-    """Batter シートのデータから Player/Batter を構築し、該当する Team に追加する"""
+def add_batters_from_dataframe(df: pd.DataFrame, teams: dict[str, Team]) -> None:
+    """Batter シートのデータから Player/Batter を構築し、該当する Team に追加する
+
+    Args:
+        df: 野手情報が含まれる pandas DataFrame
+        teams: プレイヤーを追加先のチーム辞書（破壊的に更新される）
+
+    Returns:
+        None
+    """
     for _, row in df.iterrows():
         common_info = CommonInformation(
             number=str(row["背番号"]),

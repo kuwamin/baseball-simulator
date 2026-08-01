@@ -31,6 +31,9 @@ def export_stats_to_excel(teams: dict[str, Team], output_file: str) -> None:
     Args:
         teams: チーム名をキーとしたTeamオブジェクトの辞書
         output_file: 出力先Excelファイルのパス
+
+    Returns:
+        None
     """
     with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
         for team_name, team in teams.items():
@@ -59,8 +62,19 @@ def export_stats_to_excel(teams: dict[str, Team], output_file: str) -> None:
                 )
 
 
-def _build_pitcher_stat_row(team_name: str, player: Player) -> dict:
-    """投手1人分の成績行辞書を生成する"""
+def _build_pitcher_stat_row(team_name: str, player: Player) -> dict[str, object]:
+    """投手1人分の成績行辞書を生成する
+
+    Args:
+        team_name: プレイヤーが所属するチーム名
+        player: 対象のPlayerオブジェクト
+
+    Returns:
+        dict[str, object]: Excel出力用の列名をキーとする投手成績辞書
+
+    Raises:
+        ValueError: プレイヤーが投手データ（pitcher）を保持していない場合
+    """
     pitcher = player.pitcher
     if pitcher is None:
         raise ValueError(f"Player '{player.player_info.name}' has no pitcher data.")
@@ -100,8 +114,19 @@ def _build_pitcher_stat_row(team_name: str, player: Player) -> dict:
     }
 
 
-def _build_batter_stat_row(team_name: str, player: Player) -> dict:
-    """野手1人分の成績行辞書を生成する"""
+def _build_batter_stat_row(team_name: str, player: Player) -> dict[str, object]:
+    """野手1人分の成績行辞書を生成する
+
+    Args:
+        team_name: プレイヤーが所属するチーム名
+        player: 対象のPlayerオブジェクト
+
+    Returns:
+        dict[str, object]: Excel出力用の列名をキーとする野手成績辞書
+
+    Raises:
+        ValueError: プレイヤーが野手データ（batter）を保持していない場合
+    """
     batter = player.batter
     if batter is None:
         raise ValueError(f"Player '{player.player_info.name}' has no batter data.")
