@@ -1,45 +1,21 @@
 import random
 from enum import Enum, auto
 
+from baseball_simulator.common.const import (
+    BATTING_RESULT_MAP,
+    BREAKING_BALL_AVG,
+    MEET_AVG,
+    POWER_AVG,
+    SPEED_BATTER_AVG,
+    SPEED_PITCHER_AVG,
+    TRAJECTORY_AVG,
+    TRAJECTORY_MAP,
+)
 from baseball_simulator.data_model.data_model import Player
-
-# 定数値（平均能力値）
-SPEED_PITCHER_AVG = 145.0
-BREAKING_BALL_AVG = 7.0
-MEET_AVG = 50.0
-POWER_AVG = 50.0
-SPEED_BATTER_AVG = 50.0
-TRAJECTORY_AVG = 2.0
-
-# 弾道別の打球種類確率マップ [ゴロ(GB), ライナー(LD), 内野フライ(IFFB), 外野フライ(OFFB)]
-TRAJECTORY_MAP: dict[int, tuple[int, int, int, int]] = {
-    1: (600, 200, 150, 50),
-    2: (450, 300, 100, 150),
-    3: (300, 350, 50, 300),
-    4: (200, 300, 20, 480),
-}
-
-# 方向×打球種類ごとのベース安打確率マップ (1000分率)
-BATTING_RESULT_MAP: dict[str, dict[str, dict[str, float]]] = {
-    "PULL": {
-        "GB": {"1B": 150, "2B": 20, "3B": 0, "HR": 0},
-        "LD": {"1B": 350, "2B": 120, "3B": 5, "HR": 30},
-        "IFFB": {"1B": 10, "2B": 0, "3B": 0, "HR": 0},
-        "OFFB": {"1B": 80, "2B": 100, "3B": 10, "HR": 80},
-    },
-    "CENT": {
-        "GB": {"1B": 180, "2B": 10, "3B": 0, "HR": 0},
-        "LD": {"1B": 400, "2B": 80, "3B": 10, "HR": 20},
-        "IFFB": {"1B": 10, "2B": 0, "3B": 0, "HR": 0},
-        "OFFB": {"1B": 120, "2B": 80, "3B": 15, "HR": 60},
-    },
-    "OPPO": {
-        "GB": {"1B": 140, "2B": 15, "3B": 0, "HR": 0},
-        "LD": {"1B": 320, "2B": 100, "3B": 5, "HR": 10},
-        "IFFB": {"1B": 10, "2B": 0, "3B": 0, "HR": 0},
-        "OFFB": {"1B": 100, "2B": 70, "3B": 5, "HR": 30},
-    },
-}
+from baseball_simulator.game.special_abilities import (
+    calculate_batter_special_ability,
+    calculate_pitcher_special_ability,
+)
 
 
 class AtBatResult(Enum):
@@ -68,8 +44,7 @@ RESULT_CONVERT_MAP = {
 
 
 def _choice_by_weight(weights: list[tuple[str, float]]) -> str | None:
-    """
-    [(結果名, 確率重み), ...] のリストを受け取り、1000分率の乱数判定で選択された結果を返す。
+    """[(結果名, 確率重み), ...] のリストを受け取り、1000分率の乱数判定で選択された結果を返す。
     どの条件にも引っかからなかった場合は None を返す。
     """
     num = random.randrange(1000)
@@ -81,7 +56,9 @@ def _choice_by_weight(weights: list[tuple[str, float]]) -> str | None:
     return None
 
 
-def determine_at_bat_result(pitcher: Player, batter: Player) -> AtBatResult:
+def determine_at_bat_result(
+    pitcher: Player, batter: Player, is_risp: bool = False
+) -> AtBatResult:
     """投手の能力（調子・疲労含む）と打者の能力（調子・疲労含む）から1打席の結果を判定する"""
     assert pitcher.pitcher is not None
     assert batter.batter is not None
@@ -90,18 +67,31 @@ def determine_at_bat_result(pitcher: Player, batter: Player) -> AtBatResult:
     b_ability = batter.batter.ability.basic_ability
     b_special = batter.batter.ability.special_ability
 
+    # 特殊能力補正の計算
+    p_sp_speed, p_sp_ctrl, p_sp_break = calculate_pitcher_special_ability(
+        pitcher, batter, is_risp
+    )
+    b_sp_meet, b_sp_power = calculate_batter_special_ability(pitcher, batter, is_risp)
+
     # 投手の調子・疲労補正計算
     p_condition_corr = _pitcher_condition_correction(pitcher.barometer.condition)
     p_fatigue_debuff = pitcher.barometer.accumulates_fatigue / 100.0
 
     velocity = (
-        p_ability.velocity + p_condition_corr["velocity"] - (3.0 * p_fatigue_debuff)
+        p_ability.velocity
+        + p_sp_speed
+        + p_condition_corr["velocity"]
+        - (3.0 * p_fatigue_debuff)
     )
     control = (
-        p_ability.control + p_condition_corr["control"] - (10.0 * p_fatigue_debuff)
+        p_ability.control
+        + p_sp_ctrl
+        + p_condition_corr["control"]
+        - (10.0 * p_fatigue_debuff)
     )
     breaking_ball = (
         p_ability.breaking_ball_level
+        + p_sp_break
         + p_condition_corr["breaking_ball"]
         - (1.5 * p_fatigue_debuff)
     )
@@ -117,12 +107,14 @@ def determine_at_bat_result(pitcher: Player, batter: Player) -> AtBatResult:
 
     meet = (
         b_ability.meet
+        + b_sp_meet
         + meet_pitcher_corr
         + b_condition_corr["meet"]
         - (5.0 * b_fatigue_debuff)
     )
     power = (
         b_ability.power
+        + b_sp_power
         + power_pitcher_corr
         + b_condition_corr["power"]
         - (5.0 * b_fatigue_debuff)
