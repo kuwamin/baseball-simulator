@@ -64,6 +64,7 @@ class PitcherStats:
     completes: int = 0
     shutouts: int = 0
     bf: int = 0
+    game_bf: int = 0
     strikeouts: int = 0
     walks_allowed: int = 0
     hbp_allowed: int = 0

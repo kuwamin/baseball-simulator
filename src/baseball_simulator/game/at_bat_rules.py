@@ -12,10 +12,6 @@ from baseball_simulator.common.const import (
     TRAJECTORY_MAP,
 )
 from baseball_simulator.data_model.data_model import Player
-from baseball_simulator.game.fatigue_rules import (
-    batter_condition_correction,
-    pitcher_condition_correction,
-)
 from baseball_simulator.game.special_abilities import (
     calculate_batter_special_ability,
     calculate_pitcher_special_ability,
@@ -65,7 +61,7 @@ def determine_at_bat_result(
     b_sp_meet, b_sp_power = calculate_batter_special_ability(pitcher, batter, is_risp)
 
     # 投手の調子・疲労補正計算
-    p_condition_corr = pitcher_condition_correction(pitcher.barometer.condition)
+    p_condition_corr = _pitcher_condition_correction(pitcher.barometer.condition)
     p_fatigue_debuff = pitcher.barometer.accumulates_fatigue / 100.0
 
     velocity = (
@@ -93,7 +89,7 @@ def determine_at_bat_result(
     )
 
     # 野手の調子・疲労補正計算
-    b_condition_corr = batter_condition_correction(batter.barometer.condition)
+    b_condition_corr = _batter_condition_correction(batter.barometer.condition)
     b_fatigue_debuff = batter.barometer.accumulates_fatigue / 100.0
 
     meet = (
@@ -151,6 +147,23 @@ def _eye_logic(eye: str) -> float:
         "G": 20.0,
     }
     return eye_map.get(eye.upper(), 40.0)
+
+
+def _pitcher_condition_correction(condition: int) -> dict[str, float]:
+    """投手の調子による能力補正（絶好調:2 〜 絶不調:-2）"""
+    return {
+        "velocity": condition * 1.0,
+        "control": condition * 3.0,
+        "breaking_ball": condition * 0.5,
+    }
+
+
+def _batter_condition_correction(condition: int) -> dict[str, float]:
+    """野手の調子による能力補正（絶好調:2 〜 絶不調:-2）"""
+    return {
+        "meet": condition * 3.0,
+        "power": condition * 3.0,
+    }
 
 
 def _result_logic(

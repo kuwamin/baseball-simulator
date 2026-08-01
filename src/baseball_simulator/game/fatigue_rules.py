@@ -1,27 +1,8 @@
-"""試合前後の疲労度・コンディション更新ロジック"""
-
 from __future__ import annotations
 
 from baseball_simulator.common.const import POS_FATIGUE_MAP, RECOVERY_MAP
 from baseball_simulator.data_model.data_model import Player
 from baseball_simulator.data_model.game_model import GameState, StartingLineup
-
-
-def pitcher_condition_correction(condition: int) -> dict[str, float]:
-    """投手の調子による能力補正（絶好調:2 〜 絶不調:-2）"""
-    return {
-        "velocity": condition * 1.0,
-        "control": condition * 3.0,
-        "breaking_ball": condition * 0.5,
-    }
-
-
-def batter_condition_correction(condition: int) -> dict[str, float]:
-    """野手の調子による能力補正（絶好調:2 〜 絶不調:-2）"""
-    return {
-        "meet": condition * 3.0,
-        "power": condition * 3.0,
-    }
 
 
 def update_game_fatigue(game_state: GameState) -> None:
@@ -55,11 +36,6 @@ def _update_pitcher_fatigue(starting_lineup: StartingLineup) -> None:
         p for p in starting_lineup.team.players if p.pitcher is not None
     ]
 
-    # 実際に登板した投手（打者対戦数 bf > 0 の選手）
-    played_pitchers: list[Player] = [
-        p for p in team_pitchers if p.pitcher is not None and p.pitcher.stats.bf > 0
-    ]
-
     for p in team_pitchers:
         pitcher_obj = p.pitcher
         if pitcher_obj is None:
@@ -72,27 +48,36 @@ def _update_pitcher_fatigue(starting_lineup: StartingLineup) -> None:
         base_recover: float = float(RECOVERY_MAP.get(recovery_code, 15))
         barometer = p.barometer
 
-        if p in played_pitchers:
-            # 登板した投手：打者数に応じた負荷
-            pitch_load: float = float(pitcher_obj.stats.bf * 4)
+        # 当日の対戦打者数を取得
+        today_bf: int = pitcher_obj.stats.game_bf
 
-            pitcher_obj.fatugue_stamina += int(pitch_load)
-            barometer.accumulates_fatigue += int(
-                (pitch_load * 0.2) - (base_recover * 0.01)
-            )
+        if today_bf > 0:
+            # --- 当日登板した投手 ---
+            # 1試合中のスタミナ消費量（当日の打者数に応じた負荷を設定）
+            pitcher_obj.fatugue_stamina = int(today_bf * 2.5)
+
+            # 蓄積疲労の加算
+            fatigue_add = (today_bf * 0.25) - (base_recover * 0.1)
+            barometer.accumulates_fatigue += max(1, round(fatigue_add))
         else:
-            # 登板しなかった投手：回復
+            # --- 当日登板しなかった投手：回復 ---
+            # 1試合中のスタミナ消費量を回復（リセット）
             pitcher_obj.fatugue_stamina = max(
-                0, pitcher_obj.fatugue_stamina - int(base_recover)
+                0, pitcher_obj.fatugue_stamina - int(base_recover * 2.0)
             )
 
-            # 先発起用かどうかで回復量を分岐
-            is_starter: bool = p is starting_lineup.starter_pitcher
-            recovery_weight: float = 0.2 if is_starter else 0.02
-            barometer.accumulates_fatigue -= int(base_recover * recovery_weight)
+            # 先発起用（登板なし＝中○日のローテ消化中）かどうかで回復量を分岐
+            is_starter: bool = pitcher_obj.aptitude == "先"
+            recovery_weight: float = 0.35 if is_starter else 0.15
+
+            recovered_fatigue = round(base_recover * recovery_weight)
+            barometer.accumulates_fatigue -= max(1, recovered_fatigue)
 
         # 蓄積疲労の底打ち処理
         barometer.accumulates_fatigue = max(0, barometer.accumulates_fatigue)
+
+        # 当日の打者数をリセットして次の試合に備える
+        pitcher_obj.stats.game_bf = 0
 
 
 def _update_batter_fatigue(starting_lineup: StartingLineup) -> None:
@@ -125,10 +110,12 @@ def _update_batter_fatigue(starting_lineup: StartingLineup) -> None:
             # 出場野手：守備位置に応じた負荷計算
             pos: str = positions_map.get(batter_player, "")
             fatigue_weight: float = float(POS_FATIGUE_MAP.get(pos, 1.0))
-            barometer.accumulates_fatigue += int(fatigue_weight - (base_recover * 0.01))
+            fatigue_add = fatigue_weight - (base_recover * 0.02)
+            barometer.accumulates_fatigue += max(0, round(fatigue_add))
         else:
             # 不出場野手：回復
-            barometer.accumulates_fatigue -= int(base_recover * 0.05)
+            recovered = round(base_recover * 0.1)
+            barometer.accumulates_fatigue -= max(1, recovered)
 
         # 蓄積疲労の底打ち処理
         barometer.accumulates_fatigue = max(0, barometer.accumulates_fatigue)
