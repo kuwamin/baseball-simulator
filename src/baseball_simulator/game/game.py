@@ -5,15 +5,23 @@ from baseball_simulator.data_model.game_model import GameState, StartingLineup
 from baseball_simulator.game.lineup_selector import build_starting_lineup
 
 
+def play_game(
+    home_team: Team,
+    away_team: Team,
+) -> GameState:
+    """1試合のシミュレーションを最後まで実行する（メインループ）"""
+    game_state = init_game(home_team, away_team)
+
+    return game_state
+
+
 def init_game(
     home_team: Team,
     away_team: Team,
-    game_number: int,
-    is_fatigue_considered: bool = True,
 ) -> GameState:
     """試合の初期状態（GameState）を構築し、出場選手の試合数カウントを1増やす"""
-    home_lineup = build_starting_lineup(home_team, game_number, is_fatigue_considered)
-    away_lineup = build_starting_lineup(away_team, game_number, is_fatigue_considered)
+    home_lineup = build_starting_lineup(home_team)
+    away_lineup = build_starting_lineup(away_team)
 
     # 出場選手の通算出場数（games）をインクリメント
     _increment_appearance_stats(home_lineup)
@@ -42,15 +50,3 @@ def _increment_appearance_stats(lineup: StartingLineup) -> None:
     if starter.pitcher:
         starter.pitcher.stats.common_stats.games += 1
         starter.pitcher.stats.starter += 1
-
-
-def play_game(
-    home_team: Team,
-    away_team: Team,
-    game_number: int,
-    is_fatigue_considered: bool = True,
-) -> GameState:
-    """1試合のシミュレーションを最後まで実行する（メインループ）"""
-    game_state = init_game(home_team, away_team, game_number, is_fatigue_considered)
-
-    return game_state

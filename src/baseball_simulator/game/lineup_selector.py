@@ -2,12 +2,10 @@ from baseball_simulator.data_model.data_model import Player, Team
 from baseball_simulator.data_model.game_model import StartingLineup
 
 
-def build_starting_lineup(
-    team: Team, game_number: int, is_fatigue_considered: bool = True
-) -> StartingLineup:
+def build_starting_lineup(team: Team) -> StartingLineup:
     """チームデータと試合番号から StartingLineup オブジェクトを組み上げる"""
-    starter_pitcher = decide_pitcher(team, game_number)
-    fielders = decide_fielders(team, is_fatigue_considered)
+    starter_pitcher = decide_pitcher(team)
+    fielders = decide_fielders(team)
     lineup, pos_map = decide_order(fielders)
 
     return StartingLineup(
@@ -18,9 +16,8 @@ def build_starting_lineup(
     )
 
 
-def decide_pitcher(team: Team, game_number: int) -> Player:
-    """ローテーションと疲労に基づき、試合の先発投手を決定する"""
-    # 投手データがあり、適性が "先" の Player を抽出
+def decide_pitcher(team: Team) -> Player:
+    """残りのスタミナ（スタミナ - 蓄積疲労）が最も高い先発投手を決定する"""
     starters = [
         p for p in team.players if p.pitcher is not None and p.pitcher.aptitude == "先"
     ]
@@ -28,28 +25,22 @@ def decide_pitcher(team: Team, game_number: int) -> Player:
         # 適性 "先" が不在の場合は全投手から選出
         starters = [p for p in team.players if p.pitcher is not None]
 
-    num_starters = len(starters)
-    start_idx = (game_number - 1) % num_starters
+    if not starters:
+        raise ValueError(f"Team {team.team_name} has no available pitchers.")
 
-    for i in range(num_starters):
-        current_idx = (start_idx + i) % num_starters
-        candidate = starters[current_idx]
-
-        # mypy 対策: pitcher が None でないことを確定させる
-        assert candidate.pitcher is not None
-        stamina = candidate.pitcher.ability.basic_ability.stamina
-        fatigue = candidate.barometer.accumulates_fatigue
-
-        # 疲労がスタミナの30%未満（残りスタミナ70%以上）なら採用
-        if fatigue < (stamina * 0.30):
-            return candidate
-
-    return starters[start_idx]
+    # 残りスタミナが最も高い選手を選出
+    return max(starters, key=_get_remaining_stamina)
 
 
-def decide_fielders(
-    team: Team, is_fatigue_considered: bool = True
-) -> list[tuple[str, Player]]:
+def _get_remaining_stamina(p: Player) -> float:
+    # mypy 対策: pitcher が None でないことを保証
+    assert p.pitcher is not None
+    stamina = p.pitcher.ability.basic_ability.stamina
+    fatigue = p.barometer.accumulates_fatigue
+    return stamina - fatigue
+
+
+def decide_fielders(team: Team) -> list[tuple[str, Player]]:
     """守備位置ごとに最適な野手（9名）を選出する"""
     position_weights = {
         "捕": 1.0,
@@ -66,7 +57,6 @@ def decide_fielders(
     selected_players: list[tuple[str, Player]] = []
 
     for pos, weight in position_weights.items():
-        # mypy 対策: batter が None でないことをガード
         pos_candidates = [
             p for p in candidates if p.batter is not None and p.batter.position == pos
         ]
@@ -76,15 +66,13 @@ def decide_fielders(
 
         best_player = max(
             pos_candidates,
-            key=lambda p: calculate_score(p, weight, is_fatigue_considered),
+            key=lambda p: calculate_score(p, weight),
         )
         selected_players.append((pos, best_player))
         candidates.remove(best_player)
 
-    # 指名打者 (指) の選出（守備重み 0）
-    dh_player = max(
-        candidates, key=lambda p: calculate_score(p, 0.0, is_fatigue_considered)
-    )
+    # 指名打者 (指) の選出
+    dh_player = max(candidates, key=lambda p: calculate_score(p, 0.0))
     selected_players.append(("指", dh_player))
 
     return selected_players
@@ -132,14 +120,12 @@ def decide_order(
     lineup[7] = remaining.pop(0)
     lineup[8] = remaining.pop(0)
 
-    # 型チェック用（全て Player で埋まっていることを確定させる）
+    # 型チェック用
     final_lineup = [p for p in lineup if p is not None]
     return final_lineup, pos_map
 
 
-def calculate_score(
-    player: Player, position_weight: float, is_fatigue_considered: bool
-) -> float:
+def calculate_score(player: Player, position_weight: float) -> float:
     """野手の選出スコアを計算する"""
     if not player.batter:
         return 0.0
@@ -151,9 +137,8 @@ def calculate_score(
     ) * position_weight
 
     # 疲労考慮ペナルティ
-    if is_fatigue_considered and player.barometer:
-        fatigue_penalty = player.barometer.accumulates_fatigue * 0.5
-        base_score = max(0.0, base_score - fatigue_penalty)
+    fatigue_penalty = player.barometer.accumulates_fatigue * 0.5
+    base_score = max(0.0, base_score - fatigue_penalty)
 
     return base_score
 
