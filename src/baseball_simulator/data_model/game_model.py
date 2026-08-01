@@ -44,6 +44,15 @@ class GameState:
 
     is_game_over: bool = False
 
+    # 現在登板中の投手を保持するフィールド（初期値は先発投手）
+    current_home_pitcher: Player = field(init=False)
+    current_away_pitcher: Player = field(init=False)
+
+    def __post_init__(self) -> None:
+        """初期化時に現在登板中の投手へ先発投手をセット"""
+        self.current_home_pitcher = self.home_lineup.starter_pitcher
+        self.current_away_pitcher = self.away_lineup.starter_pitcher
+
     def get_current_batter(self) -> Player:
         """現在打席に立っている打者（野手の Player オブジェクト）を取得"""
         if self.is_top:
@@ -53,8 +62,15 @@ class GameState:
     def get_current_pitcher(self) -> Player:
         """現在マウンドに立っている守備側の投手（投手の Player オブジェクト）を取得"""
         if self.is_top:
-            return self.home_lineup.starter_pitcher  # 表は Home が守備
-        return self.away_lineup.starter_pitcher  # 裏は Away が守備
+            return self.current_home_pitcher  # 表は Home が守備
+        return self.current_away_pitcher  # 裏は Away が守備
+
+    def change_pitcher(self, new_pitcher: Player) -> None:
+        """守備側の現在登板中の投手を交代する"""
+        if self.is_top:
+            self.current_home_pitcher = new_pitcher
+        else:
+            self.current_away_pitcher = new_pitcher
 
     def advance_next_batter(self) -> None:
         """次の打者へインデックスを進める (0〜8の循環)"""

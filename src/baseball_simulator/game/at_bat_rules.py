@@ -12,6 +12,10 @@ from baseball_simulator.common.const import (
     TRAJECTORY_MAP,
 )
 from baseball_simulator.data_model.data_model import Player
+from baseball_simulator.game.fatigue_rules import (
+    batter_condition_correction,
+    pitcher_condition_correction,
+)
 from baseball_simulator.game.special_abilities import (
     calculate_batter_special_ability,
     calculate_pitcher_special_ability,
@@ -43,19 +47,6 @@ RESULT_CONVERT_MAP = {
 }
 
 
-def _choice_by_weight(weights: list[tuple[str, float]]) -> str | None:
-    """[(結果名, 確率重み), ...] のリストを受け取り、1000分率の乱数判定で選択された結果を返す。
-    どの条件にも引っかからなかった場合は None を返す。
-    """
-    num = random.randrange(1000)
-    current_weight = 0.0
-    for label, weight in weights:
-        current_weight += weight
-        if num <= current_weight:
-            return label
-    return None
-
-
 def determine_at_bat_result(
     pitcher: Player, batter: Player, is_risp: bool = False
 ) -> AtBatResult:
@@ -74,7 +65,7 @@ def determine_at_bat_result(
     b_sp_meet, b_sp_power = calculate_batter_special_ability(pitcher, batter, is_risp)
 
     # 投手の調子・疲労補正計算
-    p_condition_corr = _pitcher_condition_correction(pitcher.barometer.condition)
+    p_condition_corr = pitcher_condition_correction(pitcher.barometer.condition)
     p_fatigue_debuff = pitcher.barometer.accumulates_fatigue / 100.0
 
     velocity = (
@@ -102,7 +93,7 @@ def determine_at_bat_result(
     )
 
     # 野手の調子・疲労補正計算
-    b_condition_corr = _batter_condition_correction(batter.barometer.condition)
+    b_condition_corr = batter_condition_correction(batter.barometer.condition)
     b_fatigue_debuff = batter.barometer.accumulates_fatigue / 100.0
 
     meet = (
@@ -134,23 +125,6 @@ def determine_at_bat_result(
     )
 
     return RESULT_CONVERT_MAP[str_result]
-
-
-def _pitcher_condition_correction(condition: int) -> dict[str, float]:
-    """投手の調子による能力補正（絶好調:2 〜 絶不調:-2）"""
-    return {
-        "velocity": condition * 1.0,
-        "control": condition * 3.0,
-        "breaking_ball": condition * 0.5,
-    }
-
-
-def _batter_condition_correction(condition: int) -> dict[str, float]:
-    """野手の調子による能力補正（絶好調:2 〜 絶不調:-2）"""
-    return {
-        "meet": condition * 3.0,
-        "power": condition * 3.0,
-    }
 
 
 def _pitcher_ability_correction(
@@ -304,3 +278,16 @@ def _result_logic(
         )
 
     return result
+
+
+def _choice_by_weight(weights: list[tuple[str, float]]) -> str | None:
+    """[(結果名, 確率重み), ...] のリストを受け取り、1000分率の乱数判定で選択された結果を返す。
+    どの条件にも引っかからなかった場合は None を返す。
+    """
+    num = random.randrange(1000)
+    current_weight = 0.0
+    for label, weight in weights:
+        current_weight += weight
+        if num <= current_weight:
+            return label
+    return None

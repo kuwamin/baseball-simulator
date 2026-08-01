@@ -21,6 +21,7 @@ def main() -> None:
 
     # 試合ロジック
     for i in range(TOTAL_GAME_NUMBER):
+        print(i)
         ## 対戦カード決定 TODO:要修正
         team_1 = teams["Hawks"]
         team_2 = teams[OPPOSITE_TEAM_LIST[i % 5]]

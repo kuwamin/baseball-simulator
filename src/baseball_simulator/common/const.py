@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-TOTAL_GAME_NUMBER: int = 143
+TOTAL_GAME_NUMBER: int = 5
 OPPOSITE_TEAM_LIST: list[str] = [
     "Fighters",
     "Buffaloes",
