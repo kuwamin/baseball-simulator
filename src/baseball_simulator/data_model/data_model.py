@@ -33,8 +33,7 @@ class PitcherBasicAbility:
     velocity: int
     control: int
     stamina: int
-    breaking_ball_level: int
-    breaking_ball_number: int
+    breaking_ball: int
 
 
 @dataclass
@@ -83,8 +82,18 @@ class PitcherStats:
 class Pitcher:
     aptitude: str
     ability: PitcherAbility
+    player_info: CommonInformation
+    barometer: Barometer
     fatugue_stamina: int = 0
     stats: PitcherStats = field(default_factory=PitcherStats)
+
+    def __hash__(self) -> int:
+        return id(self)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Pitcher):
+            return NotImplemented
+        return self is other
 
 
 # 3. 野手モデル (Batter Models)
@@ -142,7 +151,17 @@ class BatterStats:
 class Batter:
     position: str
     ability: BatterAbility
+    player_info: CommonInformation
+    barometer: Barometer
     stats: BatterStats = field(default_factory=BatterStats)
+
+    def __hash__(self) -> int:
+        return id(self)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Batter):
+            return NotImplemented
+        return self is other
 
 
 # 4. 選手・チームモデル (Player / Team Models)
@@ -154,15 +173,21 @@ class Player:
     batter: Batter | None = None
 
     def __post_init__(self) -> None:
-        """初期化直後に {xor} 制約（どちらか片方のみが存在する）を検証する"""
+        """初期化直後に {xor} 制約（どちらか片方のみが存在する）を検証し、
+        配下の Pitcher/Batter に player_info と barometer の参照を自動で同期・セットする
+        """
         if (self.pitcher is None and self.batter is None) or (
             self.pitcher is not None and self.batter is not None
         ):
             raise ValueError("Player must have either Pitcher or Batter role (XOR).")
 
+        # 配下のロールオブジェクト側へ共通インスタンスをバインド
+        role = self.pitcher or self.batter
+        if role is not None:
+            role.player_info = self.player_info
+            role.barometer = self.barometer
+
     def __hash__(self) -> int:
-        # インスタンス自身のメモリ上の識別子(id)でハッシュを計算する
-        # これにより内部の stats や barometer が更新されてもハッシュ値が変わらず、ネストされたクラスの unhashable エラーも回避できる
         return id(self)
 
     def __eq__(self, other: object) -> bool:

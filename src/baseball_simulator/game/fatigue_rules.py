@@ -1,8 +1,24 @@
 from __future__ import annotations
 
 from baseball_simulator.common.const import POS_FATIGUE_MAP, RECOVERY_MAP
-from baseball_simulator.data_model.data_model import Player
+from baseball_simulator.data_model.data_model import Batter, Pitcher
 from baseball_simulator.data_model.game_model import GameState, StartingLineup
+
+
+def pitcher_fatigue_correction(accumulates_fatigue: int) -> tuple[int, int, int]:
+    velocity_corr = int(-5 * accumulates_fatigue / 100)
+    control_corr = int(-10 * accumulates_fatigue / 100)
+    breaking_ball_corr = int(-5 * accumulates_fatigue / 100)
+
+    return velocity_corr, control_corr, breaking_ball_corr
+
+
+def batter_fatigue_correction(accumulates_fatigue: int) -> tuple[int, int, int]:
+    meet_corr = int(-10 * accumulates_fatigue / 100)
+    power_corr = int(-10 * accumulates_fatigue / 100)
+    speed_corr = int(-10 * accumulates_fatigue / 100)
+
+    return meet_corr, power_corr, speed_corr
 
 
 def update_game_fatigue(game_state: GameState) -> None:
@@ -32,16 +48,14 @@ def _update_pitcher_fatigue(starting_lineup: StartingLineup) -> None:
         starting_lineup (StartingLineup): チームのスタメン・出場選手情報
     """
     # チーム所属の全投手
-    all_pitchers: list[Player] = [
-        p for p in starting_lineup.team.players if p.pitcher is not None
+    pitchers: list[Pitcher] = [
+        player.pitcher
+        for player in starting_lineup.team.players
+        if player.pitcher is not None
     ]
 
-    for p in all_pitchers:
-        pitcher = p.pitcher
-        if pitcher is None:
-            continue
-
-        barometer = p.barometer
+    for pitcher in pitchers:
+        barometer = pitcher.barometer
 
         # 回復力の参照
         recovery_code: str = (
@@ -54,7 +68,7 @@ def _update_pitcher_fatigue(starting_lineup: StartingLineup) -> None:
 
         if today_bf > 0:
             # 本日登板した投手
-            # 打者1人あたり4ポイントのスタミナ消費
+            # 打者1人あたり3.5ポイントのスタミナ消費
             pitch_load = today_bf * 3.5
             pitcher.fatugue_stamina += round(pitch_load)
 
@@ -87,29 +101,27 @@ def _update_batter_fatigue(starting_lineup: StartingLineup) -> None:
     Args:
         starting_lineup (StartingLineup): チームのスタメン・出場選手情報
     """
-    positions_map: dict[Player, str] = starting_lineup.positions
-    starter_set: set[Player] = set(starting_lineup.lineup)
+    positions_map: dict[Batter, str] = starting_lineup.positions
+    starter_set: set[Batter] = set(starting_lineup.lineup)
 
     # チーム所属の全野手
-    all_batter_players: list[Player] = [
-        p for p in starting_lineup.team.players if p.batter is not None
+    batters: list[Batter] = [
+        player.batter
+        for player in starting_lineup.team.players
+        if player.batter is not None
     ]
 
-    for batter_player in all_batter_players:
-        batter_obj = batter_player.batter
-        if batter_obj is None:
-            continue
-
+    for batter in batters:
         # 回復力の参照 (common_special_ability -> recovery)
         recovery_code: str = (
-            batter_obj.ability.special_ability.common_special_ability.recovery
+            batter.ability.special_ability.common_special_ability.recovery
         )
         base_recover: float = float(RECOVERY_MAP.get(recovery_code, 15))
-        barometer = batter_player.barometer
+        barometer = batter.barometer
 
-        if batter_player in starter_set:
+        if batter in starter_set:
             # 出場野手：守備位置に応じた負荷計算
-            pos: str = positions_map.get(batter_player, "")
+            pos: str = positions_map.get(batter, "")
             fatigue_weight: float = float(POS_FATIGUE_MAP.get(pos, 1.0))
             fatigue_add = fatigue_weight - (base_recover * 0.02)
             barometer.accumulates_fatigue += max(0, round(fatigue_add))

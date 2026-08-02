@@ -1,12 +1,13 @@
-from baseball_simulator.data_model.data_model import Player, Team
+from baseball_simulator.common.const import POSITION_WEIGHT
+from baseball_simulator.data_model.data_model import Batter, Pitcher, Team
 from baseball_simulator.data_model.game_model import StartingLineup
 
 
 def build_starting_lineup(team: Team) -> StartingLineup:
     """チームデータと試合番号から StartingLineup オブジェクトを組み上げる"""
     starter_pitcher = decide_pitcher(team)
-    fielders = decide_fielders(team)
-    lineup, pos_map = decide_order(fielders)
+    starter_batters = decide_fielders(team)
+    lineup, pos_map = decide_order(starter_batters)
 
     return StartingLineup(
         team=team,
@@ -16,80 +17,95 @@ def build_starting_lineup(team: Team) -> StartingLineup:
     )
 
 
-def decide_pitcher(team: Team) -> Player:
+def decide_pitcher(team: Team) -> Pitcher:
     """残りのスタミナ（スタミナ - 蓄積疲労）が最も高い先発投手を決定する"""
-    starters = [
-        p for p in team.players if p.pitcher is not None and p.pitcher.aptitude == "先"
+    # チーム内の適性 "先" のPitcherを抽出
+    starters: list[Pitcher] = [
+        player.pitcher
+        for player in team.players
+        if player.pitcher is not None and player.pitcher.aptitude == "先"
     ]
-    if not starters:
-        # 適性 "先" が不在の場合は全投手から選出
-        starters = [p for p in team.players if p.pitcher is not None]
 
+    # 適性 "先" が不在の場合は全投手から選出
+    if not starters:
+        starters = [
+            player.pitcher for player in team.players if player.pitcher is not None
+        ]
+
+    # 投手自体がいない場合、ValueError
     if not starters:
         raise ValueError(f"Team {team.team_name} has no available pitchers.")
 
     # 残りスタミナが最も高い選手を選出
-    return max(starters, key=_get_remaining_stamina)
+    starter = max(starters, key=_get_remaining_stamina)
+
+    return starter
 
 
-def _get_remaining_stamina(p: Player) -> float:
-    """前日までの減少スタミナを考慮して実効スタミナを算出する"""
-    assert p.pitcher is not None
-    stamina = p.pitcher.ability.basic_ability.stamina
-    fatigue_stamina = p.pitcher.fatugue_stamina
+def _get_remaining_stamina(pitcher: Pitcher) -> float:
+    """減少スタミナを考慮して実効スタミナを算出する"""
+    stamina = pitcher.ability.basic_ability.stamina
+    fatigue_stamina = pitcher.fatugue_stamina
 
-    return stamina - fatigue_stamina
+    return float(stamina - fatigue_stamina)
 
 
-def decide_fielders(team: Team) -> list[tuple[str, Player]]:
+def decide_fielders(team: Team) -> list[tuple[str, Batter]]:
     """守備位置ごとに最適な野手（9名）を選出する"""
-    position_weights = {
-        "捕": 1.0,
-        "遊": 0.9,
-        "二": 0.9,
-        "中": 0.6,
-        "三": 0.4,
-        "右": 0.3,
-        "左": 0.1,
-        "一": 0.1,
-    }
 
-    candidates = [p for p in team.players if p.batter is not None]
-    selected_players: list[tuple[str, Player]] = []
+    # チーム内のBatterを抽出
+    batters: list[Batter] = [
+        player.batter for player in team.players if player.batter is not None
+    ]
+    selected_batters: list[tuple[str, Batter]] = []
 
-    for pos, weight in position_weights.items():
-        pos_candidates = [
-            p for p in candidates if p.batter is not None and p.batter.position == pos
-        ]
+    for pos, weight in POSITION_WEIGHT.items():
+        pos_batters = [batter for batter in batters if batter.position == pos]
         # 該当ポジションの選手が残っていない場合は野手全員から選出
-        if not pos_candidates:
-            pos_candidates = candidates
+        if not pos_batters:
+            pos_batters = batters
 
-        best_player = max(
-            pos_candidates,
-            key=lambda p: calculate_score(p, weight),
+        best_batter = max(
+            pos_batters,
+            key=lambda batter: calculate_batter_score(batter, weight),
         )
-        selected_players.append((pos, best_player))
-        candidates.remove(best_player)
+        selected_batters.append((pos, best_batter))
+        batters.remove(best_batter)
 
     # 指名打者 (指) の選出
-    dh_player = max(candidates, key=lambda p: calculate_score(p, 0.0))
-    selected_players.append(("指", dh_player))
+    dh_batter = max(batters, key=lambda batter: calculate_batter_score(batter, 0.0))
+    selected_batters.append(("指", dh_batter))
 
-    return selected_players
+    return selected_batters
+
+
+def calculate_batter_score(batter: Batter, position_weight: float) -> float:
+    """野手の選出スコアを計算する"""
+
+    ability = batter.ability.basic_ability
+    # 総合打力 + 守備力（守備位置重み付き）
+    batting_score = ability.meet * 1.0 + ability.power * 1.2 + ability.speed * 0.8
+    fielding_score = (ability.fielding * 1.5 + ability.arm * 1.0) * position_weight
+    base_score = batting_score + fielding_score
+
+    # 疲労考慮ペナルティ
+    fatigue_penalty = batter.barometer.accumulates_fatigue * 0.5
+    batter_score = max(0.0, base_score - fatigue_penalty)
+
+    return batter_score
 
 
 def decide_order(
-    fielders: list[tuple[str, Player]],
-) -> tuple[list[Player], dict[Player, str]]:
+    starter_batters: list[tuple[str, Batter]],
+) -> tuple[list[Batter], dict[Batter, str]]:
     """スタメン野手（9名）から 1〜9 番の打順リストと守備位置マップを作成する"""
-    working_list = [player for _, player in fielders]
-    pos_map = {player: pos for pos, player in fielders}
+    working_list = [batter for _, batter in starter_batters]
+    pos_map = {batter: pos for pos, batter in starter_batters}
 
-    lineup: list[Player | None] = [None] * 9
+    lineup: list[Batter | None] = [None] * 9
 
     # 総合打力が高い上位6名と下位3名に分ける
-    working_list.sort(key=_get_total_hit_skill, reverse=True)
+    working_list.sort(key=_get_total_batting_skill, reverse=True)
     top_candidates = working_list[:6]
     bottom_candidates = working_list[6:]
 
@@ -102,7 +118,7 @@ def decide_order(
     lineup[0] = top_candidates.pop(0)
 
     # 3番：総合打力
-    top_candidates.sort(key=_get_total_hit_skill, reverse=True)
+    top_candidates.sort(key=_get_total_batting_skill, reverse=True)
     lineup[2] = top_candidates.pop(0)
 
     # 2番：ミート
@@ -122,42 +138,22 @@ def decide_order(
     lineup[8] = remaining.pop(0)
 
     # 型チェック用
-    final_lineup = [p for p in lineup if p is not None]
+    final_lineup = [b for b in lineup if b is not None]
     return final_lineup, pos_map
 
 
-def calculate_score(player: Player, position_weight: float) -> float:
-    """野手の選出スコアを計算する"""
-    if not player.batter:
-        return 0.0
-
-    b = player.batter.ability.basic_ability
-    # 総合打力 + 守備力（守備位置重み付き）
-    base_score = (b.meet * 1.0 + b.power * 1.2 + b.speed * 0.8) + (
-        b.fielding * 1.5 + b.arm * 1.0
-    ) * position_weight
-
-    # 疲労考慮ペナルティ
-    fatigue_penalty = player.barometer.accumulates_fatigue * 0.5
-    base_score = max(0.0, base_score - fatigue_penalty)
-
-    return base_score
+def _get_total_batting_skill(batter: Batter) -> int:
+    ability = batter.ability.basic_ability
+    return ability.meet + ability.power + ability.speed
 
 
-def _get_power(p: Player) -> int:
-    return p.batter.ability.basic_ability.power if p.batter else 0
+def _get_power(batter: Batter) -> int:
+    return batter.ability.basic_ability.power
 
 
-def _get_speed(p: Player) -> int:
-    return p.batter.ability.basic_ability.speed if p.batter else 0
+def _get_speed(batter: Batter) -> int:
+    return batter.ability.basic_ability.speed
 
 
-def _get_meet(p: Player) -> int:
-    return p.batter.ability.basic_ability.meet if p.batter else 0
-
-
-def _get_total_hit_skill(p: Player) -> int:
-    if not p.batter:
-        return 0
-    b = p.batter.ability.basic_ability
-    return b.meet + b.power + b.speed
+def _get_meet(batter: Batter) -> int:
+    return batter.ability.basic_ability.meet

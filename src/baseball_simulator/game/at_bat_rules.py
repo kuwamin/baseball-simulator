@@ -4,14 +4,23 @@ from enum import Enum, auto
 from baseball_simulator.common.const import (
     BATTING_RESULT_MAP,
     BREAKING_BALL_AVG,
+    CONTROL_AVG,
     MEET_AVG,
     POWER_AVG,
-    SPEED_BATTER_AVG,
-    SPEED_PITCHER_AVG,
+    SPEED_AVG,
     TRAJECTORY_AVG,
     TRAJECTORY_MAP,
+    VELOCITY_AVG,
 )
-from baseball_simulator.data_model.data_model import Player
+from baseball_simulator.data_model.data_model import Batter, Pitcher
+from baseball_simulator.game.condition_rules import (
+    batter_condition_correction,
+    pitcher_condition_correction,
+)
+from baseball_simulator.game.fatigue_rules import (
+    batter_fatigue_correction,
+    pitcher_fatigue_correction,
+)
 from baseball_simulator.game.special_abilities import (
     calculate_batter_special_ability,
     calculate_pitcher_special_ability,
@@ -44,43 +53,38 @@ RESULT_CONVERT_MAP = {
 
 
 def determine_at_bat_result(
-    pitcher: Player, batter: Player, is_risp: bool = False
+    pitcher: Pitcher, batter: Batter, is_risp: bool = False
 ) -> AtBatResult:
     """投手の能力（調子・疲労含む）と打者の能力（調子・疲労含む）から1打席の結果を判定する"""
-    assert pitcher.pitcher is not None
-    assert batter.batter is not None
 
-    p_ability = pitcher.pitcher.ability.basic_ability
-    b_ability = batter.batter.ability.basic_ability
-    b_special = batter.batter.ability.special_ability
+    p_ability = pitcher.ability.basic_ability
+    b_ability = batter.ability.basic_ability
+    b_special = batter.ability.special_ability
 
     # 特殊能力補正の計算
-    p_sp_speed, p_sp_ctrl, p_sp_break = calculate_pitcher_special_ability(
+    p_sp_velocity, p_sp_control, p_sp_breaking = calculate_pitcher_special_ability(
         pitcher, batter, is_risp
     )
     b_sp_meet, b_sp_power = calculate_batter_special_ability(pitcher, batter, is_risp)
 
-    # 投手の調子・疲労補正計算
-    p_condition_corr = _pitcher_condition_correction(pitcher.barometer.condition)
-    p_fatigue_debuff = pitcher.barometer.accumulates_fatigue / 100.0
+    # 調子補正計算
+    p_cond_velocity, p_cond_control, p_cond_breaking = pitcher_condition_correction(
+        pitcher.barometer.condition
+    )
+    b_cond_meet, b_cond_power = batter_condition_correction(batter.barometer.condition)
 
-    velocity = (
-        p_ability.velocity
-        + p_sp_speed
-        + p_condition_corr["velocity"]
-        - (3.0 * p_fatigue_debuff)
+    # 疲労度補正計算
+    p_fat_velocity, p_fat_control, p_fat_breaking = pitcher_fatigue_correction(
+        pitcher.barometer.accumulates_fatigue
     )
-    control = (
-        p_ability.control
-        + p_sp_ctrl
-        + p_condition_corr["control"]
-        - (10.0 * p_fatigue_debuff)
+    b_fat_meet, b_fat_power, b_fat_speed = batter_fatigue_correction(
+        batter.barometer.accumulates_fatigue
     )
+
+    velocity = p_ability.velocity + p_sp_velocity + p_cond_velocity + p_fat_velocity
+    control = p_ability.control + p_sp_control + p_cond_control + p_fat_control
     breaking_ball = (
-        p_ability.breaking_ball_level
-        + p_sp_break
-        + p_condition_corr["breaking_ball"]
-        - (1.5 * p_fatigue_debuff)
+        p_ability.breaking_ball + p_sp_breaking + p_cond_breaking + p_fat_breaking
     )
 
     # 投手能力が打者能力に与える補正計算
@@ -88,25 +92,11 @@ def determine_at_bat_result(
         velocity, control, breaking_ball
     )
 
-    # 野手の調子・疲労補正計算
-    b_condition_corr = _batter_condition_correction(batter.barometer.condition)
-    b_fatigue_debuff = batter.barometer.accumulates_fatigue / 100.0
-
-    meet = (
-        b_ability.meet
-        + b_sp_meet
-        + meet_pitcher_corr
-        + b_condition_corr["meet"]
-        - (5.0 * b_fatigue_debuff)
-    )
+    meet = b_ability.meet + b_sp_meet + b_cond_meet + b_fat_meet + meet_pitcher_corr
     power = (
-        b_ability.power
-        + b_sp_power
-        + power_pitcher_corr
-        + b_condition_corr["power"]
-        - (5.0 * b_fatigue_debuff)
+        b_ability.power + b_sp_power + b_cond_power + b_fat_power + power_pitcher_corr
     )
-    speed_b = b_ability.speed - (5.0 * b_fatigue_debuff)
+    speed_b = b_ability.speed + b_fat_speed
     eye = b_special.eye
 
     str_result = _result_logic(
@@ -127,43 +117,13 @@ def _pitcher_ability_correction(
     velocity: float, control: float, breaking_ball: float
 ) -> tuple[float, float]:
     """投手の基礎能力から打者への抑え込み補正を算出"""
-    meet_corr = -(control - MEET_AVG) * 0.2 - (breaking_ball - BREAKING_BALL_AVG) * 2.0
+    meet_corr = (
+        -(control - CONTROL_AVG) * 0.2 - (breaking_ball - BREAKING_BALL_AVG) * 2.0
+    )
     power_corr = (
-        -(velocity - SPEED_PITCHER_AVG) * 0.3
-        - (breaking_ball - BREAKING_BALL_AVG) * 1.5
+        -(velocity - VELOCITY_AVG) * 0.3 - (breaking_ball - BREAKING_BALL_AVG) * 1.5
     )
     return meet_corr, power_corr
-
-
-def _eye_logic(eye: str) -> float:
-    """選球眼ランク（A~G等）に応じた補正値"""
-    eye_map = {
-        "A": 80.0,
-        "B": 70.0,
-        "C": 60.0,
-        "D": 50.0,
-        "E": 40.0,
-        "F": 30.0,
-        "G": 20.0,
-    }
-    return eye_map.get(eye.upper(), 40.0)
-
-
-def _pitcher_condition_correction(condition: int) -> dict[str, float]:
-    """投手の調子による能力補正（絶好調:2 〜 絶不調:-2）"""
-    return {
-        "velocity": condition * 1.0,
-        "control": condition * 3.0,
-        "breaking_ball": condition * 0.5,
-    }
-
-
-def _batter_condition_correction(condition: int) -> dict[str, float]:
-    """野手の調子による能力補正（絶好調:2 〜 絶不調:-2）"""
-    return {
-        "meet": condition * 3.0,
-        "power": condition * 3.0,
-    }
 
 
 def _result_logic(
@@ -181,7 +141,7 @@ def _result_logic(
     # 打球が発生しないイベント（三振・四球・死球）
     swing_out_per = (
         125
-        + (velocity - SPEED_PITCHER_AVG)
+        + (velocity - VELOCITY_AVG)
         + (breaking_ball - BREAKING_BALL_AVG) * 3
         + (meet - MEET_AVG) * (-5)
     )
@@ -250,7 +210,7 @@ def _result_logic(
 
     # 成績補正（結果の上書き判定）
     if result == "OUT":
-        sc_per = max(0.0, (meet - MEET_AVG) * 2 + (speed_b - SPEED_BATTER_AVG))
+        sc_per = max(0.0, (meet - MEET_AVG) * 2 + (speed_b - SPEED_AVG))
         dc_per = max(0.0, (power - POWER_AVG) * 0.25)
         hr_per = max(0.0, (power - POWER_AVG) * 2 + (trajectory - TRAJECTORY_AVG) * 10)
         return (
@@ -265,7 +225,7 @@ def _result_logic(
         )
 
     elif result == "1B":
-        dc_per = max(0.0, (power - POWER_AVG) * 0.25 + (speed_b - SPEED_BATTER_AVG) * 2)
+        dc_per = max(0.0, (power - POWER_AVG) * 0.25 + (speed_b - SPEED_AVG) * 2)
         hr_per = max(0.0, (power - POWER_AVG) * 3)
         return (
             _choice_by_weight(
@@ -278,7 +238,7 @@ def _result_logic(
         )
 
     elif result == "2B":
-        tc_per = max(0.0, (speed_b - SPEED_BATTER_AVG) * 8)
+        tc_per = max(0.0, (speed_b - SPEED_AVG) * 8)
         hr_per = max(0.0, (power - POWER_AVG) * 4 + (trajectory - TRAJECTORY_AVG) * 15)
         return (
             _choice_by_weight(
@@ -291,6 +251,20 @@ def _result_logic(
         )
 
     return result
+
+
+def _eye_logic(eye: str) -> float:
+    """選球眼ランク（A~G等）に応じた補正値"""
+    eye_map = {
+        "A": 80.0,
+        "B": 70.0,
+        "C": 60.0,
+        "D": 50.0,
+        "E": 40.0,
+        "F": 30.0,
+        "G": 20.0,
+    }
+    return eye_map.get(eye.upper(), 40.0)
 
 
 def _choice_by_weight(weights: list[tuple[str, float]]) -> str | None:

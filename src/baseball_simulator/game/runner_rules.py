@@ -1,11 +1,11 @@
-from baseball_simulator.data_model.data_model import Player
+from baseball_simulator.data_model.data_model import Batter
 from baseball_simulator.data_model.game_model import Bases
 from baseball_simulator.game.at_bat_rules import AtBatResult
 
 
 def advance_runners(
     result: AtBatResult,
-    batter: Player,
+    batter: Batter,
     bases: Bases,
 ) -> int:
     """
@@ -27,7 +27,7 @@ def advance_runners(
     return runs
 
 
-def _advance_walk(batter: Player, bases: Bases) -> int:
+def _advance_walk(batter: Batter, bases: Bases) -> int:
     """四球（フォアボール）：押し出しのみ進塁"""
     runs = 0
     if bases.first is not None:
@@ -42,7 +42,7 @@ def _advance_walk(batter: Player, bases: Bases) -> int:
     return runs
 
 
-def _advance_single(batter: Player, bases: Bases) -> int:
+def _advance_single(batter: Batter, bases: Bases) -> int:
     """単打：走者は基本的に1ベース進塁"""
     runs = 0
     if bases.third is not None:
@@ -55,7 +55,7 @@ def _advance_single(batter: Player, bases: Bases) -> int:
     return runs
 
 
-def _advance_double(batter: Player, bases: Bases) -> int:
+def _advance_double(batter: Batter, bases: Bases) -> int:
     """二塁打：走者は基本的に2ベース進塁"""
     runs = 0
     if bases.third is not None:
@@ -72,7 +72,7 @@ def _advance_double(batter: Player, bases: Bases) -> int:
     return runs
 
 
-def _advance_triple(batter: Player, bases: Bases) -> int:
+def _advance_triple(batter: Batter, bases: Bases) -> int:
     """三塁打：全走者生還、打者は三塁へ"""
     runs = 0
     for runner in (bases.first, bases.second, bases.third):
@@ -85,7 +85,7 @@ def _advance_triple(batter: Player, bases: Bases) -> int:
     return runs
 
 
-def _advance_home_run(batter: Player, bases: Bases) -> int:
+def _advance_home_run(batter: Batter, bases: Bases) -> int:
     """本塁打：全走者＋打者自身が全員生還"""
     runs = 1  # 打者自身の得点
     for runner in (bases.first, bases.second, bases.third):
