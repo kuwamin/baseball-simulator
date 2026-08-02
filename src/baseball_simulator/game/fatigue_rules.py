@@ -31,53 +31,54 @@ def _update_pitcher_fatigue(starting_lineup: StartingLineup) -> None:
     Args:
         starting_lineup (StartingLineup): チームのスタメン・出場選手情報
     """
-    # チームに所属する全選手から投手を抽出
-    team_pitchers: list[Player] = [
+    # チーム所属の全投手
+    all_pitchers: list[Player] = [
         p for p in starting_lineup.team.players if p.pitcher is not None
     ]
 
-    for p in team_pitchers:
-        pitcher_obj = p.pitcher
-        if pitcher_obj is None:
+    for p in all_pitchers:
+        pitcher = p.pitcher
+        if pitcher is None:
             continue
+
+        barometer = p.barometer
 
         # 回復力の参照
         recovery_code: str = (
-            pitcher_obj.ability.special_ability.common_special_ability.recovery
+            pitcher.ability.special_ability.common_special_ability.recovery
         )
         base_recover: float = float(RECOVERY_MAP.get(recovery_code, 15))
-        barometer = p.barometer
 
-        # 当日の対戦打者数を取得
-        today_bf: int = pitcher_obj.stats.game_bf
+        # 本日の対打者数
+        today_bf: int = pitcher.stats.game_bf
 
         if today_bf > 0:
-            # --- 当日登板した投手 ---
-            # 1試合中のスタミナ消費量（当日の打者数に応じた負荷を設定）
-            pitcher_obj.fatugue_stamina = int(today_bf * 2.5)
+            # 本日登板した投手
+            # 打者1人あたり4ポイントのスタミナ消費
+            pitch_load = today_bf * 3.5
+            pitcher.fatugue_stamina += round(pitch_load)
 
-            # 蓄積疲労の加算
-            fatigue_add = (today_bf * 0.25) - (base_recover * 0.1)
-            barometer.accumulates_fatigue += max(1, round(fatigue_add))
+            # 蓄積疲労の計算：投球負荷から回復力の一部を差し引いた値を加算
+            fatigue_add = (pitch_load * 0.15) - (base_recover * 0.05)
+            if fatigue_add > 0:
+                barometer.accumulates_fatigue += round(fatigue_add)
+
         else:
-            # --- 当日登板しなかった投手：回復 ---
-            # 1試合中のスタミナ消費量を回復（リセット）
-            pitcher_obj.fatugue_stamina = max(
-                0, pitcher_obj.fatugue_stamina - int(base_recover * 2.0)
-            )
+            # 2. 本日登板しなかった投手（休養）
+            # 減少体力の回復
+            pitcher.fatugue_stamina -= round(base_recover)
 
-            # 先発起用（登板なし＝中○日のローテ消化中）かどうかで回復量を分岐
-            is_starter: bool = pitcher_obj.aptitude == "先"
-            recovery_weight: float = 0.35 if is_starter else 0.15
-
+            # 蓄積疲労の回復
+            recovery_weight = 0.2 if pitcher.aptitude == "先" else 0.05
             recovered_fatigue = round(base_recover * recovery_weight)
             barometer.accumulates_fatigue -= max(1, recovered_fatigue)
 
-        # 蓄積疲労の底打ち処理
+        # 値の標準化（底打ち）とクリーンアップ
+        pitcher.fatugue_stamina = max(0, pitcher.fatugue_stamina)
         barometer.accumulates_fatigue = max(0, barometer.accumulates_fatigue)
 
-        # 当日の打者数をリセットして次の試合に備える
-        pitcher_obj.stats.game_bf = 0
+        # 当日打者数のリセット（次の試合へ向けてクリア）
+        pitcher.stats.game_bf = 0
 
 
 def _update_batter_fatigue(starting_lineup: StartingLineup) -> None:

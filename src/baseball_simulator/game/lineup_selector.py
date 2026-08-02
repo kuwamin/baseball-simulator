@@ -33,11 +33,12 @@ def decide_pitcher(team: Team) -> Player:
 
 
 def _get_remaining_stamina(p: Player) -> float:
-    # mypy 対策: pitcher が None でないことを保証
+    """前日までの減少スタミナを考慮して実効スタミナを算出する"""
     assert p.pitcher is not None
     stamina = p.pitcher.ability.basic_ability.stamina
-    fatigue = p.barometer.accumulates_fatigue
-    return stamina - fatigue
+    fatigue_stamina = p.pitcher.fatugue_stamina
+
+    return stamina - fatigue_stamina
 
 
 def decide_fielders(team: Team) -> list[tuple[str, Player]]:

@@ -35,6 +35,8 @@ class GameState:
     home_score: int = 0
     away_score: int = 0
     out_count: int = 0
+    home_pitcher_stamina: float = 0.0
+    away_pitcher_stamina: float = 0.0
 
     away_batter_index: int = 0
     home_batter_index: int = 0
@@ -99,3 +101,15 @@ class GameState:
 
         if self.inning > 9:
             self.is_game_over = True
+
+    # プロパティで現在守備側のスタミナを動的に取得・更新できるようにする
+    @property
+    def current_pitcher_stamina(self) -> float:
+        return self.home_pitcher_stamina if self.is_top else self.away_pitcher_stamina
+
+    @current_pitcher_stamina.setter
+    def current_pitcher_stamina(self, value: float) -> None:
+        if self.is_top:
+            self.home_pitcher_stamina = value
+        else:
+            self.away_pitcher_stamina = value

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random
+
 from baseball_simulator.data_model.data_model import Player, Team
 from baseball_simulator.data_model.game_model import GameState, StartingLineup
 from baseball_simulator.game.at_bat_rules import AtBatResult, determine_at_bat_result
@@ -25,6 +27,18 @@ def play_game(
     return game_state
 
 
+def _init_pitcher_stamina(pitcher_player: Player, is_starter: bool) -> float:
+    """投手の登板時スタミナ初期値を計算する"""
+    if pitcher_player.pitcher is None:
+        return 0.0
+    p = pitcher_player.pitcher
+    base = float(p.ability.basic_ability.stamina - p.fatugue_stamina)
+    if is_starter:
+        return max(10.0, base * 1.5)
+    else:
+        return max(10.0, base * 0.2)
+
+
 def init_game(
     home_team: Team,
     away_team: Team,
@@ -37,7 +51,7 @@ def init_game(
     _increment_appearance_stats(home_lineup)
     _increment_appearance_stats(away_lineup)
 
-    return GameState(
+    game_state = GameState(
         home_lineup=home_lineup,
         away_lineup=away_lineup,
         inning=1,
@@ -47,11 +61,19 @@ def init_game(
         out_count=0,
     )
 
+    # 両チームの先発投手のスタミナをそれぞれ独立して初期化
+    game_state.home_pitcher_stamina = _init_pitcher_stamina(
+        home_lineup.starter_pitcher, is_starter=True
+    )
+    game_state.away_pitcher_stamina = _init_pitcher_stamina(
+        away_lineup.starter_pitcher, is_starter=True
+    )
+
+    return game_state
+
 
 def execute_at_bat(game_state: GameState) -> None:
     """1打席を実行し、打席結果に基づいて打者・投手の成績とゲーム状態を更新する"""
-    # 打席前に投手交代の必要性を確認・実行
-    check_and_change_pitcher(game_state)
 
     batter_player = game_state.get_current_batter()
     pitcher_player = game_state.get_current_pitcher()
@@ -88,6 +110,7 @@ def execute_at_bat(game_state: GameState) -> None:
     if pitcher_player.pitcher:
         p_stats = pitcher_player.pitcher.stats
         p_stats.bf += 1
+        p_stats.game_bf += 1
 
         if result in (
             AtBatResult.SINGLE,
@@ -105,6 +128,9 @@ def execute_at_bat(game_state: GameState) -> None:
             p_stats.outs += 1
         elif result == AtBatResult.OUT:
             p_stats.outs += 1
+
+    # 1打席ごとのスタミナ減算 (1~7のランダム値)
+    game_state.current_pitcher_stamina -= random.randint(1, 7)
 
     # 進塁処理と得点・打点・失点の記録
     if result not in (AtBatResult.OUT, AtBatResult.STRIKEOUT):
@@ -128,6 +154,8 @@ def execute_at_bat(game_state: GameState) -> None:
     # 3アウトならチェンジ、継続なら次の打者へ
     if game_state.out_count >= 3:
         game_state.change_possession()
+        # チェンジ後に新しい守備側の投手スタミナをチェック＆必要なら交代
+        check_and_change_pitcher(game_state)
     else:
         game_state.advance_next_batter()
 
@@ -147,49 +175,44 @@ def _increment_appearance_stats(lineup: StartingLineup) -> None:
 
 
 def check_and_change_pitcher(game_state: GameState) -> None:
-    """現在のイニング・投手の疲労状態・点差に応じて継投チェックを行い、必要なら投手を交代する"""
-    current_pitcher = game_state.get_current_pitcher()
-    pitcher_obj = current_pitcher.pitcher
-
-    if pitcher_obj is None:
-        return
+    """イニング開始時（out_count == 0）に投手のスタミナをチェックし、切れ（<=0）ていればリリーフへ交代する"""
 
     # 現在の守備側チームのラインナップを取得
     defending_lineup = (
         game_state.away_lineup if game_state.is_top else game_state.home_lineup
     )
+    current_pitcher = game_state.get_current_pitcher()
 
-    # スタミナ限界チェック: (stamina - fatugue_stamina * 2) <= 0 または イニングに応じた継投判断
-    stamina_margin = pitcher_obj.ability.basic_ability.stamina - (
-        pitcher_obj.fatugue_stamina * 2
-    )
+    if current_pitcher is None or current_pitcher.pitcher is None:
+        return
 
-    # 交代条件: スタミナ切れ、または7回以降で降板判定
-    need_change = stamina_margin <= 0 or game_state.inning >= 7
-
-    if need_change:
-        # 点差の計算（自チームの得点 - 相手チームの得点）
+    # スタミナ切れ判定
+    if game_state.current_pitcher_stamina <= 0:
+        # 点差の計算
         if game_state.is_top:
-            # アウェイ（先攻）守備時：away_score - home_score
-            score_diff = game_state.away_score - game_state.home_score
-        else:
-            # ホーム（後攻）守備時：home_score - away_score
             score_diff = game_state.home_score - game_state.away_score
+        else:
+            score_diff = game_state.away_score - game_state.home_score
 
+        # リリーフの選出
         reliever = decide_relief(
             starting_lineup=defending_lineup,
             inning=game_state.inning,
             score_diff=score_diff,
         )
 
-        # 交代可能な継投投手が存在し、現在の投手と異なる場合に交代を実行
         if reliever is not None and reliever is not current_pitcher:
-            # 登板数（games）をインクリメント
+            # 成績の更新（交代時のみ登板数を+1）
             if reliever.pitcher:
                 reliever.pitcher.stats.common_stats.games += 1
 
-            # GameState 内の現在投手を更新するメソッドを呼び出し
+            # 投手交代
             game_state.change_pitcher(reliever)
+
+            # リリーフのスタミナ初期化
+            game_state.current_pitcher_stamina = _init_pitcher_stamina(
+                reliever, is_starter=False
+            )
 
 
 def decide_relief(
@@ -214,7 +237,7 @@ def decide_relief(
 
     # すでに登板済みの投手（打者対戦数 bf > 0 の選手）
     already_played_list: list[Player] = [
-        p for p in all_pitchers if p.pitcher is not None and p.pitcher.stats.bf > 0
+        p for p in all_pitchers if p.pitcher is not None and p.pitcher.stats.game_bf > 0
     ]
 
     # 未登板の投手リスト
@@ -247,15 +270,15 @@ def decide_relief(
     # 役割条件 ＆ 体力フィルターによる抽出
     candidates: list[Player] = []
     for p in available_pitchers:
-        pitcher_obj = p.pitcher
-        if pitcher_obj is None:
+        pitcher = p.pitcher
+        if pitcher is None:
             continue
 
         # 役割(aptitude)が合致し、スタミナ余裕があるかチェック
         # (basic_ability.stamina - fatugue_stamina * 2) > 0
-        is_role_matched = pitcher_obj.aptitude in role_target
+        is_role_matched = pitcher.aptitude in role_target
         has_stamina = (
-            pitcher_obj.ability.basic_ability.stamina - pitcher_obj.fatugue_stamina * 2
+            pitcher.ability.basic_ability.stamina - pitcher.fatugue_stamina * 2
         ) > 0
 
         if is_role_matched and has_stamina:
@@ -265,7 +288,7 @@ def decide_relief(
     if candidates:
         return candidates[0]
 
-    # 3. フォールバック処理
+    # フォールバック処理
     # 先発("先")以外で未登板の投手を抽出
     fallback_candidates = [
         p
@@ -279,7 +302,6 @@ def decide_relief(
             fallback_candidates,
             key=lambda p: p.pitcher.fatugue_stamina if p.pitcher else 9999,
         )
-
     # 先発以外も残っていない場合は、未登板の中で最も疲労度が少ない選手を返す
     return min(
         available_pitchers,
