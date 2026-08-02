@@ -2,28 +2,6 @@ import pandas as pd
 
 from baseball_simulator.data_model.data_model import Player, Team
 
-# 逆引き用マッピング辞書
-REVERSE_PITCHER_APTITUDE_MAP: dict[int, str] = {
-    1: "先",
-    2: "勝継",
-    3: "負継",
-    4: "セ",
-    5: "抑",
-}
-
-REVERSE_BATTER_POSITION_MAP: dict[int, str] = {
-    1: "投",
-    2: "捕",
-    3: "一",
-    4: "二",
-    5: "三",
-    6: "遊",
-    7: "左",
-    8: "中",
-    9: "右",
-    10: "指",
-}
-
 
 def export_stats_to_excel(teams: dict[str, Team], output_file: str) -> None:
     """チーム辞書から全チームの投手・野手成績をそれぞれシート別にExcelへ書き出す
@@ -31,6 +9,9 @@ def export_stats_to_excel(teams: dict[str, Team], output_file: str) -> None:
     Args:
         teams: チーム名をキーとしたTeamオブジェクトの辞書
         output_file: 出力先Excelファイルのパス
+
+    Returns:
+        None
     """
     with pd.ExcelWriter(output_file, engine="openpyxl") as writer:
         for team_name, team in teams.items():
@@ -59,8 +40,19 @@ def export_stats_to_excel(teams: dict[str, Team], output_file: str) -> None:
                 )
 
 
-def _build_pitcher_stat_row(team_name: str, player: Player) -> dict:
-    """投手1人分の成績行辞書を生成する"""
+def _build_pitcher_stat_row(team_name: str, player: Player) -> dict[str, object]:
+    """投手1人分の成績行辞書を生成する
+
+    Args:
+        team_name: プレイヤーが所属するチーム名
+        player: 対象のPlayerオブジェクト
+
+    Returns:
+        dict[str, object]: Excel出力用の列名をキーとする投手成績辞書
+
+    Raises:
+        ValueError: プレイヤーが投手データ（pitcher）を保持していない場合
+    """
     pitcher = player.pitcher
     if pitcher is None:
         raise ValueError(f"Player '{player.player_info.name}' has no pitcher data.")
@@ -75,7 +67,9 @@ def _build_pitcher_stat_row(team_name: str, player: Player) -> dict:
         "所属": team_name,
         "背番号": info.number,
         "名前": info.name,
-        "適性": REVERSE_PITCHER_APTITUDE_MAP.get(pitcher.aptitude, ""),
+        "適性": pitcher.aptitude,
+        "蓄積疲労": player.barometer.accumulates_fatigue,
+        "減少スタミナ": pitcher.fatugue_stamina,
         "登板数": stats.common_stats.games,
         "先発数": stats.starter,
         "勝利": stats.wins,
@@ -100,8 +94,19 @@ def _build_pitcher_stat_row(team_name: str, player: Player) -> dict:
     }
 
 
-def _build_batter_stat_row(team_name: str, player: Player) -> dict:
-    """野手1人分の成績行辞書を生成する"""
+def _build_batter_stat_row(team_name: str, player: Player) -> dict[str, object]:
+    """野手1人分の成績行辞書を生成する
+
+    Args:
+        team_name: プレイヤーが所属するチーム名
+        player: 対象のPlayerオブジェクト
+
+    Returns:
+        dict[str, object]: Excel出力用の列名をキーとする野手成績辞書
+
+    Raises:
+        ValueError: プレイヤーが野手データ（batter）を保持していない場合
+    """
     batter = player.batter
     if batter is None:
         raise ValueError(f"Player '{player.player_info.name}' has no batter data.")
@@ -116,7 +121,8 @@ def _build_batter_stat_row(team_name: str, player: Player) -> dict:
         "所属": team_name,
         "背番号": info.number,
         "名前": info.name,
-        "ポジション": REVERSE_BATTER_POSITION_MAP.get(batter.position, ""),
+        "ポジション": batter.position,
+        "蓄積疲労": player.barometer.accumulates_fatigue,
         "試合数": stats.common_stats.games,
         "打席": stats.pa,
         "打数": stats.ab,

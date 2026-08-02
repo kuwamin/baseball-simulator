@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 @dataclass
 class CommonInformation:
     number: str
-    dominant_hitting: int
-    dominant_arm: int
+    dominant_hitting: str
+    dominant_arm: str
     name: str
 
 
@@ -18,8 +18,8 @@ class Barometer:
 
 @dataclass
 class CommonSpecialAbility:
-    injury_res: int
-    recovery: int
+    injury_res: str
+    recovery: str
 
 
 @dataclass
@@ -33,17 +33,16 @@ class PitcherBasicAbility:
     velocity: int
     control: int
     stamina: int
-    breaking_ball_level: int
-    breaking_ball_number: int
+    breaking_ball: int
 
 
 @dataclass
 class PitcherSpecialAbility:
-    clutch_pitching: int
-    vs_left_batter: int
-    quick: int
-    fastball_life: int
-    toughness: int
+    clutch_pitching: str
+    vs_left_batter: str
+    quick: str
+    fastball_life: str
+    toughness: str
     common_special_ability: CommonSpecialAbility
 
 
@@ -64,6 +63,7 @@ class PitcherStats:
     completes: int = 0
     shutouts: int = 0
     bf: int = 0
+    game_bf: int = 0
     strikeouts: int = 0
     walks_allowed: int = 0
     hbp_allowed: int = 0
@@ -80,10 +80,20 @@ class PitcherStats:
 
 @dataclass
 class Pitcher:
-    aptitude: int
+    aptitude: str
     ability: PitcherAbility
+    player_info: CommonInformation
+    barometer: Barometer
     fatugue_stamina: int = 0
     stats: PitcherStats = field(default_factory=PitcherStats)
+
+    def __hash__(self) -> int:
+        return id(self)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Pitcher):
+            return NotImplemented
+        return self is other
 
 
 # 3. 野手モデル (Batter Models)
@@ -100,12 +110,12 @@ class BatterBasicAbility:
 
 @dataclass
 class BatterSpecialAbility:
-    clutch_batting: int
-    vs_left_pitcher: int
-    stealing: int
-    base_running: int
-    throwing: int
-    eye: int
+    clutch_batting: str
+    vs_left_pitcher: str
+    stealing: str
+    base_running: str
+    throwing: str
+    eye: str
     common_special_ability: CommonSpecialAbility
 
 
@@ -139,9 +149,19 @@ class BatterStats:
 
 @dataclass
 class Batter:
-    position: int
+    position: str
     ability: BatterAbility
+    player_info: CommonInformation
+    barometer: Barometer
     stats: BatterStats = field(default_factory=BatterStats)
+
+    def __hash__(self) -> int:
+        return id(self)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Batter):
+            return NotImplemented
+        return self is other
 
 
 # 4. 選手・チームモデル (Player / Team Models)
@@ -153,11 +173,27 @@ class Player:
     batter: Batter | None = None
 
     def __post_init__(self) -> None:
-        """初期化直後に {xor} 制約（どちらか片方のみが存在する）を検証する"""
+        """初期化直後に {xor} 制約（どちらか片方のみが存在する）を検証し、
+        配下の Pitcher/Batter に player_info と barometer の参照を自動で同期・セットする
+        """
         if (self.pitcher is None and self.batter is None) or (
             self.pitcher is not None and self.batter is not None
         ):
             raise ValueError("Player must have either Pitcher or Batter role (XOR).")
+
+        # 配下のロールオブジェクト側へ共通インスタンスをバインド
+        role = self.pitcher or self.batter
+        if role is not None:
+            role.player_info = self.player_info
+            role.barometer = self.barometer
+
+    def __hash__(self) -> int:
+        return id(self)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Player):
+            return NotImplemented
+        return self is other
 
 
 @dataclass
